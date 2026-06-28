@@ -33,7 +33,7 @@ public class HttpRequestExecutor {
         result.setMethod(def.getMethod().toUpperCase());
         result.setUrl(def.getUrl());
 
-        long start = System.currentTimeMillis();
+        long startNanos = System.nanoTime();
         try {
             String method = def.getMethod().toUpperCase();
             if ("CONNECT".equals(method) || "TRACE".equals(method)) {
@@ -47,7 +47,7 @@ public class HttpRequestExecutor {
             result.setErrorMessage(truncate(e.getMessage()));
             result.setStatusCode(null);
         }
-        result.setLatencyMs(System.currentTimeMillis() - start);
+        result.setLatencyMs((System.nanoTime() - startNanos) / 1_000_000L);
         return result;
     }
 
