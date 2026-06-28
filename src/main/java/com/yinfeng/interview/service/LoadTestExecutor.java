@@ -112,7 +112,7 @@ public class LoadTestExecutor {
             snapshot.setTp95(0);
             snapshot.setTp99(0);
             snapshot.setErrorRate(0);
-            snapshot.setLatencyBuckets(List.of(0L, 0L, 0L, 0L, 0L, 0L));
+            snapshot.setLatencyBuckets(boxLong(new long[MetricsAggregator.histogramBucketCount()]));
             snapshot.setBucketLabels(MetricsAggregator.histogramLabels());
         }
         sseBroadcaster.broadcast(snapshot);

@@ -1,0 +1,8 @@
+{
+  "name": "standalone-ping",
+  "mode": "STANDALONE",
+  "load": { "concurrency": 30, "durationSeconds": 10 },
+  "requests": [
+    { "method": "GET", "url": "http://localhost:8080/api/demo/ping" }
+  ]
+}

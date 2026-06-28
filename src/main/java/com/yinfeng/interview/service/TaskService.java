@@ -104,16 +104,13 @@ public class TaskService {
     }
 
     private void dispatchToWorkers(TestTask task, List<HttpRequestDefDTO> requests, List<WorkerNode> workers) {
-        int total = task.getConcurrency();
-        int n = workers.size();
-        int base = total / n;
-        int remainder = total % n;
+        List<Integer> quotas = TaskDispatchPlanner.splitConcurrency(task.getConcurrency(), workers.size());
 
         List<SubTaskDTO> subTasks = new ArrayList<>();
-        for (int i = 0; i < n; i++) {
+        for (int quota : quotas) {
             SubTaskDTO sub = new SubTaskDTO();
             sub.setTaskId(task.getId());
-            sub.setConcurrency(base + (i < remainder ? 1 : 0));
+            sub.setConcurrency(quota);
             sub.setDurationSeconds(task.getDurationSeconds());
             sub.setRequests(requests);
             subTasks.add(sub);

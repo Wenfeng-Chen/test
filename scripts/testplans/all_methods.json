@@ -1,0 +1,14 @@
+{
+  "name": "all-http-methods",
+  "mode": "STANDALONE",
+  "load": { "concurrency": 10, "durationSeconds": 10 },
+  "requests": [
+    { "method": "GET", "url": "http://localhost:8080/api/demo/resource" },
+    { "method": "POST", "url": "http://localhost:8080/api/demo/resource", "headers": { "Content-Type": "application/json" }, "body": "{\"k\":\"v\"}" },
+    { "method": "PUT", "url": "http://localhost:8080/api/demo/resource", "headers": { "Content-Type": "application/json" }, "body": "{\"k\":\"v\"}" },
+    { "method": "PATCH", "url": "http://localhost:8080/api/demo/resource", "headers": { "Content-Type": "application/json" }, "body": "{\"k\":\"v\"}" },
+    { "method": "DELETE", "url": "http://localhost:8080/api/demo/resource" },
+    { "method": "HEAD", "url": "http://localhost:8080/api/demo/resource" },
+    { "method": "OPTIONS", "url": "http://localhost:8080/api/demo/resource" }
+  ]
+}

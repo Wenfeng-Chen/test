@@ -59,28 +59,31 @@ public final class MetricsAggregator {
         return sorted.get(index).doubleValue();
     }
 
+    private static final int[] HISTOGRAM_BOUNDS_MS = {2, 5, 10, 20, 50, 100, 200};
+
     public static long[] latencyHistogram(List<Long> latencies) {
-        long[] buckets = new long[6];
-        String[] bounds = {"50", "100", "200", "500", "1000"};
+        long[] buckets = new long[HISTOGRAM_BOUNDS_MS.length + 1];
         for (Long latency : latencies) {
-            if (latency < 50) {
-                buckets[0]++;
-            } else if (latency < 100) {
-                buckets[1]++;
-            } else if (latency < 200) {
-                buckets[2]++;
-            } else if (latency < 500) {
-                buckets[3]++;
-            } else if (latency < 1000) {
-                buckets[4]++;
-            } else {
-                buckets[5]++;
+            int index = HISTOGRAM_BOUNDS_MS.length;
+            for (int i = 0; i < HISTOGRAM_BOUNDS_MS.length; i++) {
+                if (latency < HISTOGRAM_BOUNDS_MS[i]) {
+                    index = i;
+                    break;
+                }
             }
+            buckets[index]++;
         }
         return buckets;
     }
 
     public static List<String> histogramLabels() {
-        return List.of("<50ms", "50-100ms", "100-200ms", "200-500ms", "500-1000ms", ">1000ms");
+        return List.of(
+                "<2ms", "2-5ms", "5-10ms", "10-20ms",
+                "20-50ms", "50-100ms", "100-200ms", ">200ms"
+        );
+    }
+
+    public static int histogramBucketCount() {
+        return HISTOGRAM_BOUNDS_MS.length + 1;
     }
 }
