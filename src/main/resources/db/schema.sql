@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS test_task (
     duration_seconds INT NOT NULL,
     status VARCHAR(32) NOT NULL,
     request_config TEXT NOT NULL,
+    load_config TEXT NULL,
     started_at DATETIME NULL,
     finished_at DATETIME NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

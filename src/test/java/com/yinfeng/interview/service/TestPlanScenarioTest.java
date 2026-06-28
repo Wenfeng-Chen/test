@@ -57,7 +57,7 @@ class TestPlanScenarioTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"standalone.json", "distributed.json", "all_methods.json"})
+    @ValueSource(strings = {"standalone.json", "distributed.json", "all_methods.json", "rps.json", "step_ramp.json"})
     void loadTestPlanFixtures(String fileName) throws Exception {
         try (InputStream in = getClass().getResourceAsStream("/testplans/" + fileName)) {
             assertNotNull(in, "fixture missing: " + fileName);
@@ -65,7 +65,7 @@ class TestPlanScenarioTest {
             assertNotNull(plan.getName());
             assertNotNull(plan.getMode());
             assertFalse(plan.getRequests().isEmpty());
-            assertTrue(plan.getLoad().getConcurrency() > 0);
+            LoadConfigResolver.validate(plan.getLoad());
         }
     }
 

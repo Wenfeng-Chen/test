@@ -1,5 +1,7 @@
 package com.yinfeng.interview.service;
 
+import com.yinfeng.interview.dto.LoadConfigDTO;
+import com.yinfeng.interview.dto.LoadStageDTO;
 import com.yinfeng.interview.dto.SubTaskDTO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,8 +28,8 @@ class SubTaskStoreTest {
 
         assertNotNull(first);
         assertNotNull(second);
-        assertEquals(10, first.getConcurrency());
-        assertEquals(20, second.getConcurrency());
+        assertEquals(10, first.getLoad().getConcurrency());
+        assertEquals(20, second.getLoad().getConcurrency());
         assertNull(store.poll());
     }
 
@@ -54,10 +56,12 @@ class SubTaskStoreTest {
     }
 
     private SubTaskDTO subTask(Long taskId, int concurrency) {
+        LoadConfigDTO load = new LoadConfigDTO();
+        load.setConcurrency(concurrency);
+        load.setDurationSeconds(10);
         SubTaskDTO sub = new SubTaskDTO();
         sub.setTaskId(taskId);
-        sub.setConcurrency(concurrency);
-        sub.setDurationSeconds(10);
+        sub.setLoad(load);
         return sub;
     }
 }

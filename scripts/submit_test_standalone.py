@@ -8,7 +8,7 @@ MASTER = "http://localhost:8080"
 plan = {
     "name": "standalone-ping",
     "mode": "STANDALONE",
-    "load": {"concurrency": 30, "durationSeconds": 10},
+    "load": {"mode": "FIXED_CONCURRENCY", "concurrency": 30, "durationSeconds": 10},
     "requests": [
         {"method": "GET", "url": f"{MASTER}/api/demo/ping"}
     ]

@@ -1,17 +1,24 @@
 #!/usr/bin/env python3
-"""分布式模式压测：Master 拆分任务给 Worker"""
+"""阶梯加压模式：并发随阶段递增"""
 import json
 import urllib.request
 
 MASTER = "http://localhost:8080"
 
 plan = {
-    "name": "distributed-ping",
-    "mode": "DISTRIBUTED",
-    "load": {"mode": "FIXED_CONCURRENCY", "concurrency": 60, "durationSeconds": 15},
+    "name": "step-ramp-ping",
+    "mode": "STANDALONE",
+    "load": {
+        "mode": "STEP_RAMP",
+        "stages": [
+            {"concurrency": 10, "durationSeconds": 5},
+            {"concurrency": 30, "durationSeconds": 5},
+            {"concurrency": 60, "durationSeconds": 5},
+        ],
+    },
     "requests": [
         {"method": "GET", "url": f"{MASTER}/api/demo/ping"}
-    ]
+    ],
 }
 
 req = urllib.request.Request(
@@ -23,4 +30,4 @@ req = urllib.request.Request(
 with urllib.request.urlopen(req) as resp:
     result = json.loads(resp.read())
     task_id = result["data"]["taskId"]
-    print(f"[DISTRIBUTED] taskId={task_id}, dashboard={MASTER}/index.html")
+    print(f"[STEP_RAMP] taskId={task_id}, dashboard={MASTER}/index.html")

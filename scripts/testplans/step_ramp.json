@@ -1,0 +1,15 @@
+{
+  "name": "step-ramp-ping",
+  "mode": "STANDALONE",
+  "load": {
+    "mode": "STEP_RAMP",
+    "stages": [
+      { "concurrency": 10, "durationSeconds": 5 },
+      { "concurrency": 30, "durationSeconds": 5 },
+      { "concurrency": 60, "durationSeconds": 5 }
+    ]
+  },
+  "requests": [
+    { "method": "GET", "url": "http://localhost:8080/api/demo/ping" }
+  ]
+}

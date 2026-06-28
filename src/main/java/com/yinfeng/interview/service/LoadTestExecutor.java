@@ -1,6 +1,7 @@
 package com.yinfeng.interview.service;
 
 import com.yinfeng.interview.dto.HttpRequestDefDTO;
+import com.yinfeng.interview.dto.LoadConfigDTO;
 import com.yinfeng.interview.dto.MetricsSnapshotDTO;
 import com.yinfeng.interview.entity.RequestResult;
 import com.yinfeng.interview.enums.TaskStatus;
@@ -12,12 +13,6 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
 
 @Slf4j
 @Component
@@ -25,62 +20,19 @@ import java.util.concurrent.atomic.AtomicLong;
 @RequiredArgsConstructor
 public class LoadTestExecutor {
 
-    private final HttpRequestExecutor httpRequestExecutor;
+    private final LoadDriver loadDriver;
     private final MetricsSseBroadcaster sseBroadcaster;
 
-    public List<RequestResult> run(Long taskId, String workerId, int concurrency,
-                                   int durationSeconds, List<HttpRequestDefDTO> requests,
+    public List<RequestResult> run(Long taskId, String workerId, LoadConfigDTO load,
+                                   List<HttpRequestDefDTO> requests,
                                    ResultBatchHandler batchHandler) {
-        if (requests == null || requests.isEmpty()) {
-            return List.of();
-        }
-
-        AtomicBoolean running = new AtomicBoolean(true);
-        List<RequestResult> allResults = new CopyOnWriteArrayList<>();
-        AtomicLong lastSecondCount = new AtomicLong(0);
-        AtomicLong windowCount = new AtomicLong(0);
-
-        ExecutorService pool = Executors.newFixedThreadPool(concurrency);
-        long endTime = System.currentTimeMillis() + durationSeconds * 1000L;
-
-        Thread reporter = new Thread(() -> {
-            while (running.get()) {
-                try {
-                    Thread.sleep(1000);
-                    long count = windowCount.getAndSet(0);
-                    pushSnapshot(taskId, TaskStatus.RUNNING.name(), allResults, count);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-            }
-        });
-        reporter.setDaemon(true);
-        reporter.start();
-
-        for (int i = 0; i < concurrency; i++) {
-            pool.submit(() -> {
-                while (System.currentTimeMillis() < endTime) {
-                    HttpRequestDefDTO def = requests.get((int) (lastSecondCount.incrementAndGet() % requests.size()));
-                    RequestResult result = httpRequestExecutor.execute(taskId, workerId, def);
-                    allResults.add(result);
-                    windowCount.incrementAndGet();
-                }
-            });
-        }
-
-        pool.shutdown();
-        try {
-            pool.awaitTermination(durationSeconds + 30L, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-        running.set(false);
+        List<RequestResult> allResults = loadDriver.run(taskId, workerId, load, requests,
+                tick -> pushSnapshot(taskId, TaskStatus.RUNNING.name(), tick.results(), tick.windowRequestCount()));
 
         if (batchHandler != null && !allResults.isEmpty()) {
             batchHandler.flush(allResults);
         }
-        return new ArrayList<>(allResults);
+        return allResults;
     }
 
     private void pushSnapshot(Long taskId, String status, List<RequestResult> results, long windowQps) {

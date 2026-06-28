@@ -5,6 +5,7 @@ import com.yinfeng.interview.config.LoadTestProperties;
 import com.yinfeng.interview.dto.*;
 import com.yinfeng.interview.entity.RequestResult;
 import com.yinfeng.interview.service.HttpRequestExecutor;
+import com.yinfeng.interview.service.LoadDriver;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,7 +22,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
 @Component
@@ -30,7 +31,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class WorkerRunner {
 
     private final LoadTestProperties properties;
-    private final HttpRequestExecutor httpRequestExecutor;
+    private final LoadDriver loadDriver;
     private final RestClient.Builder restClientBuilder;
 
     @Value("${server.port}")
@@ -115,47 +116,18 @@ public class WorkerRunner {
     }
 
     private void executeSubTask(SubTaskDTO subTask) {
-        log.info("Executing subtask for task {}", subTask.getTaskId());
-        AtomicBoolean running = new AtomicBoolean(true);
-        List<RequestResult> buffer = new ArrayList<>();
-        long endTime = System.currentTimeMillis() + subTask.getDurationSeconds() * 1000L;
+        log.info("Executing subtask for task {}, mode={}", subTask.getTaskId(),
+                subTask.getLoad() != null ? subTask.getLoad().getMode() : "FIXED_CONCURRENCY");
+        AtomicInteger reportedSize = new AtomicInteger(0);
 
-        Thread reporter = new Thread(() -> {
-            while (running.get()) {
-                try {
-                    Thread.sleep(500);
-                    flushResults(subTask.getTaskId(), buffer);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
+        loadDriver.run(subTask.getTaskId(), workerId, subTask.getLoad(), subTask.getRequests(), tick -> {
+            List<RequestResult> all = tick.results();
+            int prev = reportedSize.get();
+            if (all.size() > prev) {
+                reportBatch(subTask.getTaskId(), new ArrayList<>(all.subList(prev, all.size())));
+                reportedSize.set(all.size());
             }
         });
-        reporter.setDaemon(true);
-        reporter.start();
-
-        var pool = Executors.newFixedThreadPool(subTask.getConcurrency());
-        for (int i = 0; i < subTask.getConcurrency(); i++) {
-            pool.submit(() -> {
-                int idx = 0;
-                while (System.currentTimeMillis() < endTime) {
-                    HttpRequestDefDTO def = subTask.getRequests().get(idx++ % subTask.getRequests().size());
-                    RequestResult result = httpRequestExecutor.execute(subTask.getTaskId(), workerId, def);
-                    synchronized (buffer) {
-                        buffer.add(result);
-                    }
-                }
-            });
-        }
-
-        pool.shutdown();
-        try {
-            pool.awaitTermination(subTask.getDurationSeconds() + 30L, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-        running.set(false);
-        flushResults(subTask.getTaskId(), buffer);
 
         TaskCompleteDTO complete = new TaskCompleteDTO();
         complete.setTaskId(subTask.getTaskId());
@@ -167,14 +139,9 @@ public class WorkerRunner {
                 .toBodilessEntity();
     }
 
-    private void flushResults(Long taskId, List<RequestResult> buffer) {
-        List<RequestResult> batch;
-        synchronized (buffer) {
-            if (buffer.isEmpty()) {
-                return;
-            }
-            batch = new ArrayList<>(buffer);
-            buffer.clear();
+    private void reportBatch(Long taskId, List<RequestResult> batch) {
+        if (batch.isEmpty()) {
+            return;
         }
 
         MetricsReportDTO report = new MetricsReportDTO();

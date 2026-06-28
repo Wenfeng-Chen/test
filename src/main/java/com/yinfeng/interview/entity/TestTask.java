@@ -28,6 +28,8 @@ public class TestTask {
 
     private String requestConfig;
 
+    private String loadConfig;
+
     private LocalDateTime startedAt;
 
     private LocalDateTime finishedAt;

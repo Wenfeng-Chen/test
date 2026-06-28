@@ -1,0 +1,12 @@
+{
+  "name": "fixed-rps-ping",
+  "mode": "STANDALONE",
+  "load": {
+    "mode": "FIXED_RPS",
+    "targetRps": 50,
+    "durationSeconds": 10
+  },
+  "requests": [
+    { "method": "GET", "url": "http://localhost:8080/api/demo/ping" }
+  ]
+}

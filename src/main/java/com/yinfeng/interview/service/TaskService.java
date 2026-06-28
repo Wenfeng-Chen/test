@@ -61,17 +61,20 @@ public class TaskService {
 
     public Long submitTask(TestPlanDTO plan) {
         validate(plan);
+        LoadConfigDTO load = plan.getLoad();
+        LoadConfigResolver.validate(load);
 
         TestTask task = new TestTask();
         task.setName(plan.getName());
         task.setMode(plan.getMode().name());
-        task.setConcurrency(plan.getLoad().getConcurrency());
-        task.setDurationSeconds(plan.getLoad().getDurationSeconds());
+        task.setConcurrency(LoadConfigResolver.peakConcurrency(load));
+        task.setDurationSeconds(LoadConfigResolver.totalDurationSeconds(load));
         task.setStatus(TaskStatus.PENDING.name());
         try {
             task.setRequestConfig(objectMapper.writeValueAsString(plan.getRequests()));
+            task.setLoadConfig(objectMapper.writeValueAsString(load));
         } catch (Exception e) {
-            throw new IllegalArgumentException("Invalid request config");
+            throw new IllegalArgumentException("Invalid task config");
         }
         testTaskMapper.insert(task);
 
@@ -90,41 +93,39 @@ public class TaskService {
         testTaskMapper.updateById(task);
 
         List<HttpRequestDefDTO> requests = parseRequests(task.getRequestConfig());
+        LoadConfigDTO load = parseLoadConfig(task);
         RunMode mode = RunMode.valueOf(task.getMode());
 
         if (mode == RunMode.DISTRIBUTED) {
             List<WorkerNode> workers = workerService.listActiveWorkers();
             if (!workers.isEmpty()) {
-                dispatchToWorkers(task, requests, workers);
+                dispatchToWorkers(task, load, requests, workers);
                 return;
             }
         }
 
-        runStandalone(task, requests);
+        runStandalone(task, load, requests);
     }
 
-    private void dispatchToWorkers(TestTask task, List<HttpRequestDefDTO> requests, List<WorkerNode> workers) {
-        List<Integer> quotas = TaskDispatchPlanner.splitConcurrency(task.getConcurrency(), workers.size());
-
+    private void dispatchToWorkers(TestTask task, LoadConfigDTO load, List<HttpRequestDefDTO> requests,
+                                   List<WorkerNode> workers) {
         List<SubTaskDTO> subTasks = new ArrayList<>();
-        for (int quota : quotas) {
+        for (int i = 0; i < workers.size(); i++) {
             SubTaskDTO sub = new SubTaskDTO();
             sub.setTaskId(task.getId());
-            sub.setConcurrency(quota);
-            sub.setDurationSeconds(task.getDurationSeconds());
+            sub.setLoad(LoadConfigResolver.splitForWorker(load, i, workers.size()));
             sub.setRequests(requests);
             subTasks.add(sub);
         }
         subTaskStore.enqueueAll(task.getId(), subTasks);
     }
 
-    private void runStandalone(TestTask task, List<HttpRequestDefDTO> requests) {
+    private void runStandalone(TestTask task, LoadConfigDTO load, List<HttpRequestDefDTO> requests) {
         try {
             List<RequestResult> allResults = loadTestExecutor.run(
                     task.getId(),
                     "master",
-                    task.getConcurrency(),
-                    task.getDurationSeconds(),
+                    load,
                     requests,
                     batch -> {
                     }
@@ -244,6 +245,7 @@ public class TaskService {
         if (plan.getLoad() == null) {
             throw new IllegalArgumentException("Load config is required");
         }
+        LoadConfigResolver.validate(plan.getLoad());
         if (plan.getRequests() == null || plan.getRequests().isEmpty()) {
             throw new IllegalArgumentException("At least one request is required");
         }
@@ -252,6 +254,20 @@ public class TaskService {
                 throw new IllegalArgumentException("Request URL is required");
             }
         }
+    }
+
+    private LoadConfigDTO parseLoadConfig(TestTask task) {
+        if (task.getLoadConfig() != null && !task.getLoadConfig().isBlank()) {
+            try {
+                return objectMapper.readValue(task.getLoadConfig(), LoadConfigDTO.class);
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Failed to parse load config");
+            }
+        }
+        LoadConfigDTO load = new LoadConfigDTO();
+        load.setConcurrency(task.getConcurrency() != null ? task.getConcurrency() : 10);
+        load.setDurationSeconds(task.getDurationSeconds() != null ? task.getDurationSeconds() : 30);
+        return load;
     }
 
     private List<HttpRequestDefDTO> parseRequests(String json) {
