@@ -1,0 +1,11 @@
+server:
+  port: ${WORKER_PORT:8081}
+
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - com.baomidou.mybatisplus.autoconfigure.MybatisPlusAutoConfiguration
+
+loadtest:
+  master-url: ${MASTER_URL:http://localhost:8080}

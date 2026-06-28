@@ -1,0 +1,58 @@
+CREATE DATABASE IF NOT EXISTS interview DEFAULT CHARACTER SET utf8mb4;
+USE interview;
+
+CREATE TABLE IF NOT EXISTS test_task (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(128) NOT NULL,
+    mode VARCHAR(32) NOT NULL,
+    concurrency INT NOT NULL,
+    duration_seconds INT NOT NULL,
+    status VARCHAR(32) NOT NULL,
+    request_config TEXT NOT NULL,
+    started_at DATETIME NULL,
+    finished_at DATETIME NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_status (status)
+);
+
+CREATE TABLE IF NOT EXISTS worker_node (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    worker_id VARCHAR(64) NOT NULL UNIQUE,
+    host VARCHAR(128) NOT NULL,
+    port INT NOT NULL,
+    status VARCHAR(32) NOT NULL,
+    last_heartbeat DATETIME NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS request_result (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    task_id BIGINT NOT NULL,
+    worker_id VARCHAR(64) NULL,
+    method VARCHAR(16) NOT NULL,
+    url VARCHAR(512) NOT NULL,
+    status_code INT NULL,
+    latency_ms BIGINT NOT NULL,
+    success TINYINT(1) NOT NULL,
+    error_message VARCHAR(512) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_task_id (task_id)
+);
+
+CREATE TABLE IF NOT EXISTS aggregated_metrics (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    task_id BIGINT NOT NULL UNIQUE,
+    total_requests BIGINT NOT NULL,
+    qps DOUBLE NOT NULL,
+    avg_latency_ms DOUBLE NOT NULL,
+    min_latency_ms DOUBLE NOT NULL,
+    max_latency_ms DOUBLE NOT NULL,
+    tp90 DOUBLE NOT NULL,
+    tp95 DOUBLE NOT NULL,
+    tp99 DOUBLE NOT NULL,
+    error_rate DOUBLE NOT NULL,
+    calculated_at DATETIME NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

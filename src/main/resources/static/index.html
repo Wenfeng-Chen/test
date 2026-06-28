@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LoadPulse · 压测监控</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Syne:wght@600;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+  <style>
+    :root {
+      --bg: #0a0e14;
+      --panel: #121820;
+      --border: #1e2a3a;
+      --text: #c9d6e3;
+      --muted: #5c6b7a;
+      --accent: #00e5a0;
+      --warn: #ff6b35;
+      --grid: rgba(0, 229, 160, 0.06);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'IBM Plex Mono', monospace;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      background-image:
+        linear-gradient(var(--grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+    header {
+      padding: 24px 32px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+    }
+    header h1 {
+      font-family: 'Syne', sans-serif;
+      font-size: 1.6rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--accent);
+    }
+    header span { color: var(--muted); font-size: 0.75rem; }
+    .controls {
+      padding: 20px 32px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    input {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 10px 14px;
+      font-family: inherit;
+      font-size: 0.85rem;
+      width: 160px;
+    }
+    input:focus { outline: 1px solid var(--accent); }
+    button {
+      background: transparent;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      padding: 10px 20px;
+      font-family: inherit;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    button:hover { background: var(--accent); color: var(--bg); }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 1px;
+      background: var(--border);
+      margin: 0 32px 20px;
+      border: 1px solid var(--border);
+    }
+    .stat {
+      background: var(--panel);
+      padding: 16px 20px;
+    }
+    .stat label { display: block; font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 6px; }
+    .stat value { font-size: 1.4rem; font-weight: 600; color: var(--accent); }
+    .stat value.warn { color: var(--warn); }
+    .charts {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 20px;
+      padding: 0 32px 32px;
+    }
+    .chart-box {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: 16px;
+      min-height: 360px;
+    }
+    .chart-box h3 {
+      font-family: 'Syne', sans-serif;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    #qpsChart, #latencyChart { width: 100%; height: 340px; }
+    .status-dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      margin-right: 6px;
+    }
+    .status-dot.live { background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>LoadPulse</h1>
+    <span>分布式 RESTful API 压测监控</span>
+  </header>
+
+  <div class="controls">
+    <input id="taskIdInput" type="number" placeholder="Task ID" />
+    <button onclick="connect()">连接 SSE</button>
+    <span><span id="statusDot" class="status-dot"></span><span id="statusText">未连接</span></span>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><label>总请求数</label><value id="totalReq">—</value></div>
+    <div class="stat"><label>当前 QPS</label><value id="qps">—</value></div>
+    <div class="stat"><label>平均 RT (ms)</label><value id="avgRt">—</value></div>
+    <div class="stat"><label>错误率 (%)</label><value id="errorRate" class="warn">—</value></div>
+    <div class="stat"><label>任务状态</label><value id="taskStatus">—</value></div>
+    <div class="stat"><label>最小 RT (ms)</label><value id="minRt">—</value></div>
+    <div class="stat"><label>最大 RT (ms)</label><value id="maxRt">—</value></div>
+    <div class="stat"><label>TP90 (ms)</label><value id="tp90">—</value></div>
+    <div class="stat"><label>TP95 (ms)</label><value id="tp95">—</value></div>
+    <div class="stat"><label>TP99 (ms)</label><value id="tp99">—</value></div>
+  </div>
+
+  <div class="charts">
+    <div class="chart-box"><h3>吞吐量曲线</h3><div id="qpsChart"></div></div>
+    <div class="chart-box"><h3>响应时间分布</h3><div id="latencyChart"></div></div>
+  </div>
+
+  <script>
+    const qpsChart = echarts.init(document.getElementById('qpsChart'), 'dark');
+    const latencyChart = echarts.init(document.getElementById('latencyChart'), 'dark');
+    const qpsTimes = [], qpsValues = [];
+    let eventSource = null;
+
+    const chartGrid = { left: 16, right: 24, top: 48, bottom: 32, containLabel: true };
+    const axisNameStyle = { color: '#5c6b7a', fontSize: 11, padding: [0, 0, 8, 0] };
+
+    qpsChart.setOption({
+      backgroundColor: 'transparent',
+      grid: chartGrid,
+      xAxis: { type: 'category', data: qpsTimes, axisLine: { lineStyle: { color: '#1e2a3a' } } },
+      yAxis: {
+        type: 'value',
+        name: 'QPS',
+        nameLocation: 'end',
+        nameGap: 16,
+        nameTextStyle: axisNameStyle,
+        splitLine: { lineStyle: { color: '#1e2a3a' } }
+      },
+      series: [{ type: 'line', data: qpsValues, smooth: true, lineStyle: { color: '#00e5a0', width: 2 }, areaStyle: { color: 'rgba(0,229,160,0.08)' }, symbol: 'none' }]
+    });
+
+    latencyChart.setOption({
+      backgroundColor: 'transparent',
+      grid: { left: 16, right: 24, top: 48, bottom: 72, containLabel: true },
+      xAxis: { type: 'category', data: [], axisLabel: { rotate: 30, fontSize: 10 }, axisLine: { lineStyle: { color: '#1e2a3a' } } },
+      yAxis: {
+        type: 'value',
+        name: 'Count',
+        nameLocation: 'end',
+        nameGap: 16,
+        nameTextStyle: axisNameStyle,
+        splitLine: { lineStyle: { color: '#1e2a3a' } }
+      },
+      series: [{ type: 'bar', data: [], itemStyle: { color: '#00e5a0' } }]
+    });
+
+    function fmt(v) {
+      return v != null && !isNaN(v) ? Number(v).toFixed(1) : '—';
+    }
+
+    function updateMetrics(d) {
+      document.getElementById('totalReq').textContent = d.totalRequests ?? '—';
+      document.getElementById('qps').textContent = fmt(d.currentQps);
+      document.getElementById('avgRt').textContent = fmt(d.avgLatencyMs);
+      document.getElementById('errorRate').textContent = fmt(d.errorRate);
+      document.getElementById('taskStatus').textContent = d.status ?? '—';
+      document.getElementById('minRt').textContent = fmt(d.minLatencyMs);
+      document.getElementById('maxRt').textContent = fmt(d.maxLatencyMs);
+      document.getElementById('tp90').textContent = fmt(d.tp90);
+      document.getElementById('tp95').textContent = fmt(d.tp95);
+      document.getElementById('tp99').textContent = fmt(d.tp99);
+    }
+
+    function connect() {
+      const taskId = document.getElementById('taskIdInput').value;
+      if (!taskId) return;
+      if (eventSource) eventSource.close();
+      qpsTimes.length = 0; qpsValues.length = 0;
+
+      eventSource = new EventSource(`/api/sse/tasks/${taskId}`);
+      document.getElementById('statusDot').className = 'status-dot live';
+      document.getElementById('statusText').textContent = '监听中';
+
+      eventSource.addEventListener('metrics', e => {
+        const d = JSON.parse(e.data);
+        updateMetrics(d);
+
+        const t = new Date(d.timestamp).toLocaleTimeString();
+        qpsTimes.push(t);
+        qpsValues.push(d.currentQps);
+        if (qpsTimes.length > 60) { qpsTimes.shift(); qpsValues.shift(); }
+        qpsChart.setOption({ xAxis: { data: qpsTimes }, series: [{ data: qpsValues }] });
+
+        if (d.bucketLabels && d.latencyBuckets) {
+          latencyChart.setOption({
+            xAxis: { data: d.bucketLabels },
+            series: [{ data: d.latencyBuckets }]
+          });
+        }
+
+        if (d.status === 'COMPLETED') {
+          document.getElementById('statusDot').className = 'status-dot';
+          document.getElementById('statusText').textContent = '已完成';
+          eventSource.close();
+        }
+      });
+
+      eventSource.onerror = () => {
+        document.getElementById('statusDot').className = 'status-dot';
+        document.getElementById('statusText').textContent = '连接断开';
+      };
+    }
+
+    window.addEventListener('resize', () => { qpsChart.resize(); latencyChart.resize(); });
+  </script>
+</body>
+</html>

@@ -1,3 +1,13 @@
 spring:
   application:
     name: interview
+  profiles:
+    active: master
+
+server:
+  port: 8080
+
+loadtest:
+  master-url: http://localhost:8080
+  worker-heartbeat-interval-ms: 10000
+  worker-poll-interval-ms: 2000
